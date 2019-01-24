@@ -1,0 +1,660 @@
+iNet test
+
+----------------------------------------------------------------------------------
+http://mail.traceon.co.th/Default.aspx
+
+ID     Network        IP           Instance Name                       Internal IP
+1       Public  203.154.58.100  Hadoop Namenode(CDH)                   192.168.4.4
+2       Public  203.154.59.116  Hadoop Datanode1(CDH)                  192.168.4.5
+3       Public	203.154.58.101	Hadoop Datanode2(CDH)                  192.168.4.6
+4	Public	203.154.59.118	Wildfly Cluster Name Node
+5	Public	203.154.59.125	Wildfly Cluster Data Node1
+6	Public	203.154.59.158	Wildfly Cluster Data Node2
+7	Public	203.154.59.194	MySQL Cluster Managament
+8	Public	203.154.59.199	MySQL Cluster Datanode Cluster1
+9	Public	203.154.59.201	MySQL Cluster Datanode Cluster2
+
+----------------------------------------------------------------------------------
+User , Password ในการเข้าใช้งาน OpenLandscape Dashboard
+
+Username : TraceON
+Password : 9fK_vHp*
+
+----------------------------------------------------------------------------------
+Login iNet VM Instance :
+ Hadoop Namenode(CDH) :
+ # root@piboonsak-probook:~# ssh -i /etc/ssh/traceon-key.pem centos@203.154.58.100
+
+ Hadoop Datanode1(CDH) :
+ # root@piboonsak-probook:~# ssh -i /etc/ssh/traceon-key.pem centos@203.154.59.116
+
+ Hadoop Datanode2(CDH) :
+ # root@piboonsak-probook:~# ssh -i /etc/ssh/traceon-key.pem centos@203.154.58.101
+
+----------------------------------------------------------------------------------
+TraceON-Subnet :
+ Allocation Pools :
+ 192.168.1.2,192.168.1.254
+
+ DNS Name Servers :
+ 203.150.213.1
+ 203.150.218.161
+----------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------
+CDH-Subnet :
+ Allocation Pools :
+ 192.168.4.2,192.168.4.254
+
+ DNS Name Servers :
+ 203.150.213.1
+ 203.150.218.161
+----------------------------------------------------------------------------------
+#Set root password
+[centos@hadoop-namenodecdh ~]$ sudo -i
+[root@hadoop-namenodecdh ~]# passwd
+Changing password for user root.
+New password: 
+BAD PASSWORD: The password is shorter than 8 characters
+Retype new password: 
+passwd: all authentication tokens updated successfully.
+[root@hadoop-namenodecdh ~]# exit
+logout
+[centos@hadoop-namenodecdh ~]$ su
+Password: 
+[root@hadoop-namenodecdh centos]# passwd centos
+Changing password for user centos.
+New password: 
+BAD PASSWORD: The password is shorter than 8 characters
+Retype new password: 
+passwd: all authentication tokens updated successfully.
+
+
+#Install nano
+[root@hadoop-namenodecdh ~]# yum install nano
+
+#Install wget
+[root@hadoop-namenodecdh ~]# sudo yum install wget
+
+# - set network connect automatically (ONBOOT=yes)
+[root@hadoop-namenodecdh ~]# nano /etc/sysconfig/network-scripts/ifcfg-eth0
+----------------------------------------------------------------------------------
+
+# - set names in /etc/hosts
+[root@hadoop-namenodecdh ~]# nano /etc/hosts
+192.168.4.4     namenode1
+192.168.4.5	data1
+192.168.4.6	data2
+
+Change hostname CLI :
+[centos@hadoop-namenodecdh ~]$ sudo hostnamectl set-hostname namenode1
+[centos@hadoop-namenodecdh ~]$ sudo /etc/init.d/network restart
+[centos@hadoop-namenodecdh ~]$ hostnamectl status
+
+Result:
+   Static hostname: namenode1
+         Icon name: computer-vm
+           Chassis: vm
+        Machine ID: de149d15bc21de2e4cc85376c8c61208
+           Boot ID: 917fee8303cc4e818ab90a9a3531879c
+    Virtualization: kvm
+  Operating System: CentOS Linux 7 (Core)
+       CPE OS Name: cpe:/o:centos:centos:7
+            Kernel: Linux 3.10.0-514.26.2.el7.x86_64
+      Architecture: x86-64
+
+[root@data1 ~]# nano /etc/sysconfig/network
+add row :
+
+HOSTNAME=namenode1
+
+[root@namenode1 ~]# sudo hostnamectl set-hostname namenode1
+
+
+[centos@hadoop-namenodecdh ~]$ sudo /etc/init.d/network restart
+
+check hostname :
+[root@namenode1 ~]# host -v -t A `hostname`
+Trying "namenode1.openstacklocal"
+Trying "namenode1"
+Host namenode1 not found: 3(NXDOMAIN)
+Received 102 bytes from 203.150.213.1#53 in 2 ms
+
+----------------------------------------------------------------------------------
+
+# - Set Firewall for allow group IP (trusted zone) :
+systemctl disable firewalld
+
+
+# - Change centos password *at root user
+[root@namenode1 centos]# passwd centos
+
+
+
+----------------------------------------------------------------------------------
+# - Install Gnome GUI on CentOS 7 / RHEL 7 : 
+ ***** wanning!!!! If install GUI it's make firewalld *****
+http://www.itzgeek.com/how-tos/linux/centos-how-tos/install-gnome-gui-on-centos-7-rhel-7.html
+
+
+ > yum group list
+ > yum group install "GNOME Desktop" "Graphical Administration Tools"
+ > ln -sf /lib/systemd/system/runlevel5.target /etc/systemd/system/default.target
+ > reboot
+ > init 5
+
+
+
+
+----------------------------------------------------------------------------------
+
+# - Create SSH Key (without passphrase) for SSH single sign-on to all data nodes
+[root@namenode1 ~]# ssh-keygen
+
+Generating public/private rsa key pair.
+Enter file in which to save the key (/root/.ssh/id_rsa): /root/.ssh/id_rsa
+Enter passphrase (empty for no passphrase): 
+Enter same passphrase again: 
+Your identification has been saved in /root/.ssh/id_rsa.
+Your public key has been saved in /root/.ssh/id_rsa.pub.
+The key fingerprint is:
+06:6c:c7:c5:d0:25:fb:e1:e2:0a:6d:b3:17:47:0d:f4 root@data2
+The key's randomart image is:
++--[ RSA 2048]----+
+|        .+ooo    |
+|     . . .oo..   |
+|      + o . .oE  |
+|     . o   o...  |
+|        S ..o    |
+|       o ....    |
+|      . + .o     |
+|       o +.      |
+|        o.       |
++-----------------+
+
+[root@namenode1 ~]# cat ~/.ssh/id_rsa.pub
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCZGgrIDKenw+6a8wa4SCgEw/LShYRiGNss14dU9dtLeAcy/ooapigGvGPVdAzjSFBMmmIcKlOXfwTgBkqCMt9P29jfhgs/20kytnPSY9ygodKpy9WU8cGeWKrVZFvnGTSjuKs8u/GW7851dob6ZL3bX3JyCw7FwF8nZb1fCc7GQeU+V2h1jAPrWaujVOLakROSInwoSpQMNn15YzZKuxyjdWCyHlnFxa/lMnMTs+0cqJqCyrDi3ekBERzv891ACIJdEkNB/7E8LduU1XYDfbcNZUDbGZrR5300VDV6ExxuzHt9TTSZVd+Yeb1yeHM/cUqFsiu7y3rEOyEkfZkRUDvN root@namenode1
+
+[root@data1 ~]# cat ~/.ssh/id_rsa.pub
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC71mwh9rEVml0VSllIfKdVNual4tuwOsybZJjY1KxvgKg9hFSP53+oQHSnIcO+zePNobrteULeqipYSihmyqEhW3ezluwtV0tKjOcIYtAlKo4vARxt5DJ5iuHZw7KBq3NI8tr82B7YzZHwmP3nwJCIwaeML/zOcWrM6/by9JjhQwhkXLYwv1xiBv6J1myuPH8j+KBjPDcamc9gJl55wVD3gDhH28BECH9rBabUX6t7gdgwuXX9raqDR71SlV6vLO20ABNNKA9qMRvH+q+RO4sRYJAXyk3MJHQVBRG35+CHDghrWdeE7H2xHLbWlYOUP/upkuvqyRK+U9N27Ovr8jnl root@data1
+
+
+[root@data2 ~]# cat ~/.ssh/id_rsa.pub
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDDyFcyyKIdGeoFMpVO7PN9WUEMp7efH8V0B9g4ialf2ERt7CpFoZNp6kpr64XuDl/lZ8w8uLIfUua6et5uiemCksXGNT3Tl3BC/KaOJ3YT2Ms5ApJ2M3+LeDzoZx/RoyYlZMVICxsXnaEahRQmSlbsXnaAN0XWO8/J67l0FbCp5F82TU0MLLdWl0084374HdtPaX/Ckw5FHjF7fZccN025uUGNTjknP3shRkFNzjcyybn3382dneN8Utx68cApWKyRHSW6+9WpyLkc8GwYy0dD6YUeDZ94RXoYE55MSECdq5fgj9+0xMN8MNsbVs5St8qZTqCPTD5A9D99WV+ioo4B root@data2
+
+
+[root@namenode1 ~]# cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
+
+#add id_rsa.pub keys other server ex data1,data2 and do like this with anther server.
+[root@namenode1 ~]# nano .ssh/authorized_keys
+
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCZGgrIDKenw+6a8wa4SCgEw/LShYRiGNss14dU9dtLeAcy/ooapigGvGPVdAzjSFBMmmIcKlOXfwTgBkqCMt9P29jfhgs/20kytnPSY9ygodKpy9WU8cGeWKrVZFvnGTSjuKs8u/GW7851dob6ZL3bX3JyCw7FwF8nZb1fCc7GQeU+V2h1jAPrWaujVOLakROSInwoSpQMNn15YzZKuxyjdWCyHlnFxa/lMnMTs+0cqJqCyrDi3ekBERzv891ACIJdEkNB/7E8LduU1XYDfbcNZUDbGZrR5300VDV6ExxuzHt9TTSZVd+Yeb1yeHM/cUqFsiu7y3rEOyEkfZkRUDvN root@namenode1
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC71mwh9rEVml0VSllIfKdVNual4tuwOsybZJjY1KxvgKg9hFSP53+oQHSnIcO+zePNobrteULeqipYSihmyqEhW3ezluwtV0tKjOcIYtAlKo4vARxt5DJ5iuHZw7KBq3NI8tr82B7YzZHwmP3nwJCIwaeML/zOcWrM6/by9JjhQwhkXLYwv1xiBv6J1myuPH8j+KBjPDcamc9gJl55wVD3gDhH28BECH9rBabUX6t7gdgwuXX9raqDR71SlV6vLO20ABNNKA9qMRvH+q+RO4sRYJAXyk3MJHQVBRG35+CHDghrWdeE7H2xHLbWlYOUP/upkuvqyRK+U9N27Ovr8jnl root@data1
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDDyFcyyKIdGeoFMpVO7PN9WUEMp7efH8V0B9g4ialf2ERt7CpFoZNp6kpr64XuDl/lZ8w8uLIfUua6et5uiemCksXGNT3Tl3BC/KaOJ3YT2Ms5ApJ2M3+LeDzoZx/RoyYlZMVICxsXnaEahRQmSlbsXnaAN0XWO8/J67l0FbCp5F82TU0MLLdWl0084374HdtPaX/Ckw5FHjF7fZccN025uUGNTjknP3shRkFNzjcyybn3382dneN8Utx68cApWKyRHSW6+9WpyLkc8GwYy0dD6YUeDZ94RXoYE55MSECdq5fgj9+0xMN8MNsbVs5St8qZTqCPTD5A9D99WV+ioo4B root@data2
+
+
+
+
+[root@namenode1 ~]# systemctl reload sshd
+
+Refer Link :
+https://www.digitalocean.com/community/tutorials/initial-server-setup-with-centos-7#step-three-—-root-privileges
+
+
+----------------------------------------------------------------------------------
+
+# 1.3 Save memory of Data Nodes with change start up mode to "multi-user mode" via below command
+
+
+[root@namenode1 ~]# systemctl set-default multi-user
+[root@namenode1 ~]# ssh data1 systemctl set-default multi-user
+[root@namenode1 ~]# ssh data2 systemctl set-default multi-user
+[root@namenode1 ~]# ssh data1 init 3
+[root@namenode1 ~]# ssh data2 init 3
+
+
+----------------------------------------------------------------------------------
+#Install Linux, Apache, MySQL, PHP (LAMP) stack On CentOS 7 do this every server node.
+Refer Link : https://www.digitalocean.com/community/tutorials/how-to-install-linux-apache-mysql-php-lamp-stack-on-centos-7
+           : https://th.godaddy.com/help/build-a-lamp-stack-linux-apache-mysql-php-centos-7-17344
+Apache:
+[root@namenode1 ~]# sudo yum install httpd
+[root@namenode1 ~]# sudo systemctl start httpd.service
+[root@namenode1 ~]# sudo systemctl enable httpd.service
+[root@namenode1 ~]# sudo systemctl status httpd.service
+
+try type url at brownser :
+http://203.154.58.100
+
+MySQL:
+[root@namenode1 ~]# sudo yum install mariadb-server mariadb
+[root@namenode1 ~]# sudo systemctl start mariadb
+[root@namenode1 ~]# sudo mysql_secure_installation
+[root@namenode1 ~]# sudo systemctl enable mariadb.service
+[root@namenode1 ~]# sudo systemctl status mariadb.service
+
+
+
+PHP :
+[root@namenode1 ~]# sudo yum install php php-mysql
+[root@namenode1 ~]# sudo systemctl restart httpd.service
+[root@namenode1 ~]# sudo yum install php-fpm
+
+check :
+[root@data1 ~]# cd /var/www/html/
+
+test by :create file info.php #In CentOS 7, this directory is located at /var/www/html/. 
+
+[root@namenode1 ~]# sudo nano /var/www/html/info.php
+Type in file:
+
+<?php phpinfo(); ?>
+
+
+Type IP-adress at broweser url /info.php : 
+http://203.154.58.100/info.php
+
+----------------------------------------------------------------------------------
+# 1.4 At Namenode start Apache Web server and MariaDB (MySQL)
+
+[root@namenode1 ~]# systemctl start httpd
+[root@namenode1 ~]# systemctl enable httpd
+[root@namenode1 ~]# systemctl start mariadb
+[root@namenode1 ~]# systemctl enable mariadb
+
+
+----------------------------------------------------------------------------------
+
+# - Install Oracle JDK (jdk-8u92-linux-x64.tar.gz) at /opt
+
+Link : https://tecadmin.net/install-java-8-on-centos-rhel-and-fedora/#
+     : https://www.digitalocean.com/community/tutorials/how-to-install-java-on-centos-and-fedora
+     : https://www.unixmen.com/install-oracle-java-jdk-8-centos-76-56-4/
+
+
+ # search for if any older JDK versions are installed in your system.  
+rpm -qa | grep -E '^open[jre|jdk]|j[re|dk]'
+
+[root@namenode1 ~]# rpm -qa | grep -E '^open[jre|jdk]|j[re|dk]'
+java-1.7.0-openjdk-headless-1.7.0.151-2.6.11.1.el7_4.x86_64
+libvirt-gobject-1.0.0-1.el7.x86_64
+java-1.8.0-openjdk-1.8.0.151-1.b12.el7_4.x86_64
+
+----------Not sure! in research ------------------------------------------------------
+
+download from Link : http://www.oracle.com/technetwork/java/javase/downloads/index.html
+run install command :
+ex:
+sudo yum localinstall jdk-8u151-linux-x64.rpm
+rpm -ivh jdk-8u151-linux-x64.rpm
+rpm -ivh jdk-8u111-linux-x64.rpm
+
+[root@namenode1 ~]# cd /opt
+[root@namenode1 opt]# wget --no-cookies --no-check-certificate "http://download.oracle.com/otn-pub/java/jdk/8u111-b14/jdk-8u111-linux-x64.rpm"
+[root@namenode1 opt]# tar xzf jdk-8u151-linux-x64.tar.gz
+[root@namenode1 opt]# cd /opt/jdk1.8.0_151/
+root@namenode1 jdk1.8.0_151]# alternatives --install /usr/bin/java java /opt/jdk1.8.0_151/bin/java 2
+[root@namenode1 jdk1.8.0_151]# alternatives --config java
+
+There is 1 program that provides 'java'.
+
+  Selection    Command
+-----------------------------------------------
+*+ 1           /opt/jdk1.8.0_151/bin/java
+
+Enter to keep the current selection[+], or type selection number: 1
+
+
+Enter to keep the current selection[+], or type selection number: 1
+[root@namenode1 jdk1.8.0_151]# alternatives --install /usr/bin/jar jar /opt/jdk1.8.0_151/bin/jar 2
+[root@namenode1 jdk1.8.0_151]# alternatives --install /usr/bin/javac javac /opt/jdk1.8.0_151/bin/javac 2
+[root@namenode1 jdk1.8.0_151]# alternatives --set jar /opt/jdk1.8.0_151/bin/jar
+[root@namenode1 jdk1.8.0_151]# alternatives --set javac /opt/jdk1.8.0_151/bin/javac
+[root@namenode1 jdk1.8.0_151]# java -version
+java version "1.8.0_151"
+Java(TM) SE Runtime Environment (build 1.8.0_151-b12)
+Java HotSpot(TM) 64-Bit Server VM (build 25.151-b12, mixed mode)
+
+
+[root@namenode1 ~]$ sudo sh -c "echo export JAVA_HOME=/usr/java/jdk1.8.0_151/jre >> /etc/environment"
+or
+------------Not sure! in research ------------------------------------------------------
+[root@namenode1 centos]# sudo nano ~/.bashrc
+
+# .bashrc
+
+# User specific aliases and functions
+
+alias rm='rm -i'
+alias cp='cp -i'
+alias mv='mv -i'
+
+# Source global definitions
+if [ -f /etc/bashrc ]; then
+        . /etc/bashrc
+fi
+
+export JAVA_HOME=/opt/jdk1.8.0_151
+export JRE_HOME=/opt/jdk1.8.0_151/jre
+export PATH=$PATH:/opt/jdk1.8.0_151/bin:/opt/jdk1.8.0_151/jre/bin
+
+
+or
+
+export JAVA_HOME=/usr/java/jdk1.8.0_151
+export JRE_HOME=/usr/java/jdk1.8.0_151/jre
+export PATH=$PATH:/usr/java/jdk1.8.0_151/bin:/usr/java/jdk1.8.0_151/jre/bin
+
+
+[root@namenode1 centos]# source ~/.bashrc
+[root@namenode1 centos]# echo $JAVA_HOME
+/opt/jdk1.8.0_151
+
+[root@namenode1 Hadoop]# alternatives --config java
+
+There are 3 programs which provide 'java'.
+
+  Selection    Command
+-----------------------------------------------
+   1           /opt/jdk1.8.0_92/bin/java
+*  2           /usr/java/jdk1.8.0_151/jre/bin/java
+ + 3           /opt/jdk1.8.0_151/bin/java
+
+Enter to keep the current selection[+], or type selection number: 3
+
+--------------Not sure! in research ------------------------------------------------------
+
+-------  install jdk ver 1.8.92 (ok it's work!)  -----------------------------------------
+
+copy file Share_Pentaho to every server node.
+Paste Folder /HADOOP(In local Desktop) to /root/Desktop/Hadoop (In server).
+like this.
+[root@data1 ~]# cd /root/Desktop/Hadoop/
+[root@data1 Hadoop]# ls
+1-install_hdfs.sh                                  cloudera-cdh-5-0.x86_64.rpm
+2-install_yarn.sh                                  jdk-8u92-linux-x64.tar.gz
+3-install_hive.sh                                  jdk_install.sh
+4-install_hue.sh                                   mountrepo.sh
+CDH5-ClusterInstallationQuickstart-2016-12-09.txt
+
+run file : jdk_install.sh (Must have file jdk-8u92-linux-x64.tar.gz for run)
+ex :
+[root@namenode1 Hadoop]# ./jdk_install.sh
+result :
+jdk1.8.0_92/
+jdk1.8.0_92/javafx-src.zip
+jdk1.8.0_92/bin/
+jdk1.8.0_92/bin/jmc
+jdk1.8.0_92/bin/serialver
+jdk1.8.0_92/bin/jmc.ini
+jdk1.8.0_92/bin/jstack
+jdk1.8.0_92/bin/rmiregistry
+
+Choose java to use.
+
+There are 3 programs which provide 'java'.
+
+  Selection    Command
+-----------------------------------------------
+   1           java-1.7.0-openjdk.x86_64 (/usr/lib/jvm/java-1.7.0-openjdk-1.7.0.161-2.6.12.0.el7_4.x86_64/jre/bin/java)
+*+ 2           java-1.8.0-openjdk.x86_64 (/usr/lib/jvm/java-1.8.0-openjdk-1.8.0.151-1.b12.el7_4.x86_64/jre/bin/java)
+   3           /opt/jdk1.8.0_92/bin/java
+
+Enter to keep the current selection[+], or type selection number: 3
+
+
+
+***** Do this every server node!
+
+
+
+------ install jdk ver 1.8.92 (ok it's work!)  -----------------------------------------
+
+
+--- Install Cloudera CDH repository (ok it's work!)  -----------------------------
+# - Install Cloudera CDH repository
+# - Set local repository /etc/yum.repo.d/cloudera.repo
+#   Do this on all the systems in the cluster.
+
+# - make floder cdh at /var/www/html every server node.
+[root@data1 html]# mkdir -p /var/www/html/cdh
+[root@data2 ~]# mkdir -p /var/www/html/cdh
+
+copy cdh at /root/Desktop/cdh  floder to /var/www/html/cdh/:
+[root@namenode1 Desktop]# scp -r cdh/* data1:/var/www/html/cdh
+
+
+[root@namenode1 ~]# cd /root/Desktop/Hadoop/
+[root@namenode1 Hadoop]# ls
+1-install_hdfs.sh                                  cloudera-cdh-5-0.x86_64.rpm
+2-install_yarn.sh                                  config
+3-install_hive.sh                                  jdk-8u92-linux-x64.tar.gz
+4-install_hue.sh                                   jdk_install.sh
+CDH5-ClusterInstallationQuickstart-2016-12-09.txt  mountrepo.sh
+
+run file : cloudera-cdh-5-0.x86_64.rpm
+[root@namenode1 Hadoop]# rpm -ivh cloudera-cdh-5-0.x86_64.rpm
+result :
+Preparing...                          ################################# [100%]
+Updating / installing...
+   1:cloudera-cdh-5-0                 ################################# [100%]
+
+[root@namenode1 Hadoop]# cd /etc/
+[root@namenode1 etc]# cd ./yum.repos.d/
+[root@namenode1 yum.repos.d]# ls
+CentOS-Base.repo       CentOS-fasttrack.repo  CentOS-Vault.repo
+CentOS-CR.repo         CentOS-Media.repo      cloudera-cdh5.repo
+CentOS-Debuginfo.repo  CentOS-Sources.repo
+[root@namenode1 yum.repos.d]# nano cloudera-cdh5.repo
+
+Edit file :
+[cloudera-cdh5]
+name=Cloudera's Distribution for Hadoop, Version 5
+# baseurl=https://archive.cloudera.com/cdh5/redhat/7/x86_64/cdh/5/
+baseurl=http://namenode1/cdh/
+gpgkey =  https://archive.cloudera.com/cdh5/redhat/7/x86_64/cdh/RPM-GPG-KEY-cloudera
+gpgcheck = 0
+
+
+--------------------------  Install Cloudera CDH repository (ok it's work!)  -----------------------------------------
+
+
+
+
+---------------------------------------------------------------------------------------------------------
+
+[root@namenode1 etc]# cd ./yum.repos.d/
+[root@namenode1 yum.repos.d]# wget http://archive.cloudera.com/cdh5/one-click-install/redhat/7/x86_64/cloudera-cdh-5-0.x86_64.rpm
+--2017-11-29 07:23:13--  http://archive.cloudera.com/cdh5/one-click-install/redhat/7/x86_64/cloudera-cdh-5-0.x86_64.rpm
+Resolving archive.cloudera.com (archive.cloudera.com)... 151.101.8.167
+Connecting to archive.cloudera.com (archive.cloudera.com)|151.101.8.167|:80... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 9152 (8.9K) [application/x-redhat-package-manager]
+Saving to: ‘cloudera-cdh-5-0.x86_64.rpm’
+
+100%[==========================================================================================>] 9,152       --.-K/s   in 0.08s   
+
+2017-11-29 07:23:13 (113 KB/s) - ‘cloudera-cdh-5-0.x86_64.rpm’ saved [9152/9152]
+
+[root@namenode1 yum.repos.d]# ls -la
+total 52
+drwxr-xr-x.  2 root root  222 พ.ย.  29 07:23 .
+drwxr-xr-x. 78 root root 8192 พ.ย.  29 04:41 ..
+-rw-r--r--.  1 root root 1664 พ.ย.  29  2016 CentOS-Base.repo
+-rw-r--r--.  1 root root 1309 พ.ย.  29  2016 CentOS-CR.repo
+-rw-r--r--.  1 root root  649 พ.ย.  29  2016 CentOS-Debuginfo.repo
+-rw-r--r--.  1 root root  314 พ.ย.  29  2016 CentOS-fasttrack.repo
+-rw-r--r--.  1 root root  630 พ.ย.  29  2016 CentOS-Media.repo
+-rw-r--r--.  1 root root 1331 พ.ย.  29  2016 CentOS-Sources.repo
+-rw-r--r--.  1 root root 2893 พ.ย.  29  2016 CentOS-Vault.repo
+-rw-r--r--.  1 root root 9152 ต.ค.  19  2015 cloudera-cdh-5-0.x86_64.rpm
+----------------------------------------------------------------------------------
+
+[root@namenode1 yum.repos.d]# sudo yum --nogpgcheck localinstall cloudera-cdh-5-0.x86_64.rpm
+or 
+rpm -ivh cloudera-cdh-5-0.x86_64.rpm
+ex:
+[root@data1 yum.repos.d]# rpm -ivh cloudera-cdh-5-0.x86_64.rpm
+[root@data2 yum.repos.d]# rpm -ivh cloudera-cdh-5-0.x86_64.rpm
+
+
+Loaded plugins: fastestmirror
+Examining cloudera-cdh-5-0.x86_64.rpm: cloudera-cdh-5-0.x86_64
+Marking cloudera-cdh-5-0.x86_64.rpm to be installed
+Resolving Dependencies
+--> Running transaction check
+---> Package cloudera-cdh.x86_64 0:5-0 will be installed
+--> Finished Dependency Resolution
+
+Dependencies Resolved
+
+====================================================================================================================================
+ Package                         Arch                      Version                Repository                                   Size
+====================================================================================================================================
+Installing:
+ cloudera-cdh                    x86_64                    5-0                    /cloudera-cdh-5-0.x86_64                     13 k
+
+Transaction Summary
+====================================================================================================================================
+Install  1 Package
+
+
+# - Create SSH Key (without passphrase) for SSH single sign-on to all data nodes
+Step 2: Optionally Add a Repository Key
+Before installing YARN or MRv1: (Optionally) add a repository key on each system in the cluster. Add the Cloudera Public GPG Key to your repository by executing one of the following commands:
+
+Do all data nodes :
+[root@namenode1 yum.repos.d]# sudo rpm --import https://archive.cloudera.com/cdh5/redhat/7/x86_64/cdh/RPM-GPG-KEY-cloudera
+
+
+
+# - Edit repository file do this all node
+
+[root@namenode1 ~]# cd /etc/yum.repos.d/
+[root@namenode1 yum.repos.d]# nano cloudera-cdh5.repo
+
+[cloudera-cdh5]
+name=Cloudera's Distribution for Hadoop, Version 5
+#baseurl=https://archive.cloudera.com/cdh5/redhat/7/x86_64/cdh/5/
+baseurl=http://namenode1/cdh/
+gpgkey =  https://archive.cloudera.com/cdh5/redhat/7/x86_64/cdh/RPM-GPG-KEY-clo$
+gpgcheck = 0
+ls -la
+[root@namenode1 yum.repos.d]# sudo yum clean all
+
+
+
+-----------------Set JAVA_HOME under /etc/default/bigtop-utils  -----------
+
+# - Set JAVA_HOME under /etc/default/bigtop
+[root@namenode1 ~]# nano /etc/default/bigtop-utils 
+Edit row export JAVA_HOME=/opt/jdk1.8.0_92
+-------------------------------------------
+# limitations under the License.
+
+# Override JAVA_HOME detection for all bigtop packages
+export JAVA_HOME=/opt/jdk1.8.0_92
+
+# Provide a colon-delimited list of directories to search for native Java libra$
+# export JAVA_NATIVE_PATH
+--------------------------------------------
+ctrl+X --> save Y
+
+***** Do this every server node!
+
+-----------------Set JAVA_HOME under /etc/default/bigtop-utils  -----------
+
+
+
+>>> ----------------------------------------------------------------------------------
+Must do it.
+# - Disabling SELinux (SELINUX=disabled) at /etc/selinux/config in each(3) servers
+[root@namenode1 ~]# getenforce
+Enforcing
+[root@namenode1 ~]# nano /etc/selinux/config
+
+Change the line SELINUX=enforcing to SELINUX=permissive.
+
+[root@namenode1 ~]# setenforce 0
+
+----------------------------------------------------------------------------------
+
+# - Set Firewall for allow group IP (trustedzone)
+ > systemctl disable firewalld
+
+----------------------------------------------------------------------------------
+# set firewall : !Warnning maybe not set!
+sudo firewall-cmd --permanent --zone=public --add-service=http 
+sudo firewall-cmd --permanent --zone=public --add-service=https
+sudo firewall-cmd --reload
+
+----------------------------------------------------------------------------------
+# Copy pdi file to server Destop.
+
+root@piboonsak-probook:~# scp root@203.154.58.100:/root/Desktop /home/piboonsak/Share_Pentaho/*
+root@piboonsak-probook:~# scp /home/piboonsak/Share_Pentaho/* root@203.154.58.100:/root/Desktop 
+
+# - Enabling NTP server
+ > yum install ntp
+ > nano /etc/ntp.conf
+ 
+# List of NTP servers used by the ntpdate service.
+0.centos.pool.ntp.org
+
+ > chkconfig ntpd on
+ > service ntpd start
+ > ntpdate -u <your_ntp_server>
+ > hwclock --systohc
+
+timedatectl
+[root@data1 ~]# timedatectl
+      Local time: ศ. 2017-12-08 07:53:16 UTC
+  Universal time: ศ. 2017-12-08 07:53:16 UTC
+        RTC time: ศ. 2017-12-08 07:53:15
+       Time zone: UTC (UTC, +0000)
+     NTP enabled: yes
+NTP synchronized: yes
+ RTC in local TZ: no
+      DST active: n/a
+
+
+----------------------------------------------------------------------------------
+# install zookeeper  in 3 servers: option! must set when set HA.
+
+[root@namenode1 ~]# sudo yum install zookeeper-server
+[root@namenode1 ~]# sudo service zookeeper-server init
+[root@namenode1 ~]# sudo service zookeeper-server start
+JMX enabled by default
+Using config: /etc/zookeeper/conf/zoo.cfg
+Starting zookeeper ... STARTED
+
+[root@data1 yum.repos.d]# sudo service zookeeper-server stop
+
+---------------------------------------------------------------------------------
+# - • Disable CentOS repository
+
+– yum-config-manager --disable CentOS-7*
+– yum repolist all
+
+* if want to enable
+– yum-config-manager --enable CentOS-7*
+– yum repolist all
+
+# enable cloudera repo.
+- yum-config-manager --enable
+
+----------------------------------------------------------------------------------
+# 3. Install and Config HDFS
+
+
+
+
+
+
+
+
+
+
+
+
+

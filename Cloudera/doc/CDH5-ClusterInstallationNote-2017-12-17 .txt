@@ -1,0 +1,953 @@
+###########################################################
+## Cloudera Hadoop (CDH5) Cluster Setup Guide
+## by Kitirak Moungmingsuk <kittirak@clusterkit.co.th>
+## Ref: http://www.cloudera.com/content/cloudera/en/documentation/core/latest/topics/cdh_ig_hdfs_cluster_deploy.html?scroll=topic_11_2
+## Last Modify: 25 May 2016
+###########################################################
+#
+# Minimum requirement 
+# - Name Node 3.5GB of RAM
+# - Data Node 1GB of RAM
+#
+# - for Virtual box set Network to NAT-Network
+#
+# Prerapring before Install
+# - Configuring Network 
+# - set connect automatically (ONBOOT=yes) /etc/sysconfig/network-scripts/ifcfg-enp0s3
+# - set names in /etc/hosts
+# - Disabling SELinux (SELINUX=disabled) at /etc/selinux/config
+# - Set Firewall for allow group IP (trusted zone)
+# - Enabling NTP (only for real server, VM is automatic sync from host os)
+#
+#
+# Additional (only in this training) 
+# - Setting NAT Network (only for vm connected in cluster)
+
+
+# 1. Install Oracle JDK
+cd /root/Desktop/Hadoop/
+tar xvf jdk-8u92-linux-x64.tar.gz -C /opt
+alternatives --install "/usr/bin/java" "java" "/opt/jdk1.8.0_92/bin/java" 1 \
+--slave /usr/bin/javac javac /opt/jdk1.8.0_92/bin/javac \
+--slave /usr/bin/javaws javaws /opt/jdk1.8.0_92/bin/javaws \
+--slave /usr/bin/jar jar /opt/jdk1.8.0_92/bin/jar
+
+alternatives --config java
+
+# Choose installed JDK, I think is number two (2)
+
+# 2. Install Cloudera CDH repository (you can download at http://archive.cloudera.com/cdh5/one-click-install/redhat/7/x86_64/cloudera-cdh-5-0.x86_64.rpm)
+rpm -ivh cloudera-cdh-5-0.x86_64.rpm
+
+# 2.1 [extra] Use local repository (skip if not use local repository)
+vi /etc/hosts
+10.0.2.4 	namenode1
+10.0.2.5	data1
+10.0.2.6	data2
+
+vi /etc/yum.repos.d/cloudera-cdh5.repo
+[cloudera-cdh5]
+name=Cloudera's Distribution for Hadoop, Version 5
+baseurl=http://namenode1/cdh/
+gpgkey=http://archive.cloudera.com/cdh5/redhat/6/x86_64/cdh/RPM-GPG-KEY-cloudera
+gpgcheck=0
+
+# - Disable CentOS repository  (only in this training) 
+yum-config-manager --disable CentOS-7*
+yum repolist all
+
+# 2.2 Clone VM Image
+# Full Clone with reinitialize MAC Address
+
+# After clone completed
+# - Verify your IP address in all nodes and set to /etc/hosts file
+# - At name node, set VBox Shared Folders to cdh. after that ran below commands :-
+mkdir -p /var/www/html/cdh
+mount -t vboxsf cdh /var/www/html/cdh
+systemctl start httpd
+systemctl enable httpd 
+
+# - Open web browser to http://namenode1/cdh/ check it work or not?
+# - At data nodes, for save memory set multi-user mode by default type 'systemctl set-default multi-user'
+
+# 2.3 Create SSH Key (without passphrase) and place public key to all nodes for ssh without password
+# at Name node run 
+ssh-keygen
+ssh-copy-id -i ~/.ssh/id_rsa.pub data1
+ssh-copy-id -i ~/.ssh/id_rsa.pub data2
+
+
+# 3. Install HDFS
+# 
+# 3.1 Install at NameNode
+yum install -y hadoop-hdfs-namenode
+
+# 3.2 Install at Datanode
+ssh data1 yum install -y hadoop-hdfs-datanode
+ssh data2 yum install -y hadoop-hdfs-datanode
+
+# 3.3 Copying the Hadoop Configuration and Setting Alternatives at All Nodes
+cp -r /etc/hadoop/conf.empty /etc/hadoop/conf.my_cluster
+alternatives --install /etc/hadoop/conf hadoop-conf /etc/hadoop/conf.my_cluster 50
+alternatives --set hadoop-conf /etc/hadoop/conf.my_cluster
+alternatives --display hadoop-conf
+
+# 3.4 Config at Namenode
+# 3.4.1 Config core-size.xml
+vi /etc/hadoop/conf/core-site.xml 
+<configuration>
+        <property>
+                <name>fs.defaultFS</name>
+                <value>hdfs://namenode1:8020</value>
+        </property>
+</configuration>
+
+# 3.4.2 Config hdfs-site.xml 
+vi /etc/hadoop/conf/hdfs-site.xml 
+<configuration>
+	<property>
+		<name>dfs.namenode.name.dir</name>
+		<value>file:///hadoop/name</value>
+	</property>
+
+	<property>
+		<name>dfs.datanode.data.dir</name>
+		<value>file:///hadoop/data</value>
+	</property>
+
+	<property>
+		<name>dfs.replication</name>
+		<value>2</value>
+	</property>
+
+	<property>
+		<name>dfs.permissions.superusergroup</name>
+		<value>hadoop</value>
+	</property>
+</configuration>
+
+# 3.5 Send all configuration files to Data Nodes
+scp /etc/hadoop/conf/*.xml data1:/etc/hadoop/conf
+scp /etc/hadoop/conf/*.xml data2:/etc/hadoop/conf
+
+# 3.6 Create /hadoop directory at all nodes
+mkdir -p /hadoop
+chown -R hdfs:hdfs  /hadoop
+chmod 700 /hadoop
+
+ssh data1 'mkdir -p /hadoop'
+ssh data1 'chown -R hdfs:hdfs  /hadoop'
+ssh data1 'chmod 700 /hadoop'
+
+ssh data2 'mkdir -p /hadoop'
+ssh data2 'chown -R hdfs:hdfs  /hadoop'
+ssh data2 'chmod 700 /hadoop'
+
+# 3.7 Format the NameNode.
+sudo -u hdfs hdfs namenode -format
+service hadoop-hdfs-namenode start
+
+# Open browser to http://namenode1:50070
+
+# 3.8 Start service hdfs on all Data Nodes
+ssh data1 service hadoop-hdfs-datanode start
+ssh data2 service hadoop-hdfs-datanode start
+
+#Create the /tmp directory
+sudo -u hdfs hadoop fs -mkdir /tmp
+sudo -u hdfs hadoop fs -chmod -R 1777 /tmp
+
+# 3.9 Using HDFS Step 
+
+# 3.8.1 Create home directorie on HDFS for 'clusterkit' user
+sudo -u hdfs hadoop fs -mkdir -p /user/clusterkit
+sudo -u hdfs hadoop fs -chown clusterkit /user/clusterkit
+
+# 3.8.2 Login to user 'clusterkit'
+su - clusterkit
+hadoop fs -mkdir input
+hadoop fs -put /usr/share/doc/zlib-1.2.7/* input/
+hadoop fs -ls input/
+exit
+
+# 3.10 Mount HDFS via fuse (run via root)
+yum install -y  hadoop-hdfs-fuse
+mkdir /hdfs
+hadoop-fuse-dfs dfs://namenode1:8020 /hdfs
+
+
+# 4. Install MapReduce2(Yarn)
+# Reference
+# http://www.cloudera.com/content/cloudera/en/documentation/core/latest/topics/cdh_ig_yarn_cluster_deploy.html
+
+# 4.1 Install at NameNode
+yum install -y hadoop-yarn-resourcemanager hadoop-mapreduce-historyserver
+
+# 4.2 Install at Datnode
+ssh data1 yum install -y hadoop-yarn-nodemanager 
+ssh data2 yum install -y hadoop-yarn-nodemanager 
+
+# 4.3 Config at Namenode
+vi /etc/hadoop/conf/mapred-site.xml
+<configuration>
+        <property>
+                <name>mapreduce.framework.name</name>
+                <value>yarn</value>
+        </property>
+
+        <property>
+                <name>mapreduce.jobhistory.address</name>
+                <value>namenode1:10020</value>
+        </property>
+
+        <property>
+                <name>mapreduce.jobhistory.webapp.address</name>
+                <value>namenode1:19888</value>
+        </property>
+
+        <property>
+                <name>yarn.app.mapreduce.am.staging-dir</name>
+                <value>/user</value>
+        </property>
+</configuration>
+
+# 4.4 edit two elements in yarn-site.xml 
+vi /etc/hadoop/conf/yarn-site.xml
+
+	<property>
+		<name>yarn.resourcemanager.hostname</name>
+		<value>namenode1</value>
+	</property>
+
+	<property>
+		<description>Where to aggregate logs to.</description>
+		<name>yarn.nodemanager.remote-app-log-dir</name>
+		<value>hdfs://namenode1:8020/var/log/hadoop-yarn/apps</value>
+	</property>
+
+# 4.5 Add two elements in core-site.xml
+vi /etc/hadoop/conf/core-site.xml
+	<property>
+  		<name>hadoop.proxyuser.mapred.groups</name>
+  		<value>*</value>
+	</property>
+
+	<property>
+  		<name>hadoop.proxyuser.mapred.hosts</name>
+  		<value>*</value>
+	</property>
+
+# 4.6 Send all configuration files to Data Nodes
+scp /etc/hadoop/conf/*.xml data1:/etc/hadoop/conf
+scp /etc/hadoop/conf/*.xml data2:/etc/hadoop/conf
+
+# 4.7 Create essential directorys for MapReduce2
+sudo -u hdfs hadoop fs -mkdir -p /var/log/hadoop-yarn
+sudo -u hdfs hadoop fs -chown yarn:mapred /var/log/hadoop-yarn
+
+sudo -u hdfs hadoop fs -mkdir -p /user/history
+sudo -u hdfs hadoop fs -chmod -R 1777 /user/history
+sudo -u hdfs hadoop fs -chown mapred:hadoop /user/history
+
+# 4.8 Start YARN (MapReduce2)
+# 4.7.1 At Name Node
+service hadoop-yarn-resourcemanager start
+service hadoop-mapreduce-historyserver start
+
+# 4.7.2 At Data Nodes
+ssh data1 service hadoop-yarn-nodemanager start
+ssh data2 service hadoop-yarn-nodemanager start
+
+# Open browser to http://namenode1:8088/
+
+# 4.9 Testing MapReduce2 (Pi calculation) must run with normal user!
+su - clusterkit
+yarn jar /usr/lib/hadoop-mapreduce/hadoop-mapreduce-examples.jar pi 4 100
+
+# 4.10 Configure CPU and Memory for Yarn in yarn-site.xml (for vm, use 2048 for memory and 2 for cores)
+  <property>
+    <name>yarn.nodemanager.resource.memory-mb</name>
+    <value>1536</value>
+  </property>
+  <property>
+    <name>yarn.nodemanager.resource.cpu-vcores</name>
+    <value>1</value>
+  </property>
+
+
+# 5 Using MapReduce (WordCount.java) 
+# 5.1 Login to clusterkit user
+su - clusterkit
+
+# 5.2 Build and Pack WordCount
+# 1) create wordcount_classes directory
+mkdir  wordcount_classes
+
+# 2) Compile
+javac -classpath /usr/lib/hadoop/hadoop-common.jar:/usr/lib/hadoop-mapreduce/hadoop-mapreduce-client-core.jar -d wordcount_classes/ WordCount.java
+
+# 3) Pack to jar file
+jar -cvf ./wordcount.jar -C wordcount_classes/ .
+
+# 4) Run MapReduce
+hadoop jar ./wordcount.jar org.myorg.WordCount input/*  output/wordcount
+
+# 5) View Output (output in the last command) 
+hadoop fs -ls 
+hadoop fs -ls output/
+hadoop fs -ls output/wordcount
+hadoop fs -cat output/wordcount/part-00000 
+hadoop fs -cat output/wordcount/part-00000 | sort -n -k 2  
+
+#### wordcount V.2 #######
+# http://hadoop.apache.org/docs/current/hadoop-mapreduce-client/hadoop-mapreduce-client-core/MapReduceTutorial.html
+
+######### End of HDFS and MapReduce Section ############
+
+
+# 6. Pig
+
+# 6.1 Install Pig
+yum install -y pig
+
+# 6.2 Write Pig script (wordcount.pig) 
+su - clusterkit
+cat wordcount.pig
+ 
+### Pig Wordcount ####
+### http://salsahpc.indiana.edu/ScienceCloud/pig_word_count_tutorial.htm
+
+A = load 'input/*';
+B = foreach A generate flatten(TOKENIZE((chararray)$0)) as word;
+C = filter B by word matches '\\w+';
+D = group C by word;
+E = foreach D generate COUNT(C), group;
+store E into 'output/wordcount-pig';
+
+### fine tune by http://www.slideshare.net/MarkLevy/hadoop-and-beyond-power-tools-for-data-mining
+# Ref: http://hortonworks.com/hadoop-tutorial/how-to-use-basic-pig-commands/
+
+# Run
+pig wordcount.pig
+
+# 6.3 View result
+hadoop fs -ls output
+hadoop fs -ls output/wordcount-pig
+hadoop fs -cat output/wordcount-pig/part-r-00000
+
+##### 7. Hive #####
+# 7.0 Start MariaDB(MySQL) service and Set Automatic start when machine boot
+# Hive Metadata use DBMS for contain metadata, catelog
+systemctl start mariadb
+systemctl enable mariadb
+
+# 7.1 Install Hive, run below command at name node.
+yum install -y hive-metastore hive-server2
+
+# 7.2 Create Hive DB 
+# 1) Change directory to hive scripts and Login to MySQL
+cd /usr/lib/hive/scripts/metastore/upgrade/mysql/
+mysql -u root 
+
+# 2) Create DB and User
+CREATE DATABASE metastore;
+
+CREATE USER 'hive'@'%' IDENTIFIED BY 'password';
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'hive'@'%';
+GRANT SELECT,INSERT,UPDATE,DELETE,LOCK TABLES,EXECUTE ON metastore.* TO 'hive'@'%';
+
+CREATE USER 'hive'@'localhost' IDENTIFIED BY 'password';
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'hive'@'localhost';
+GRANT SELECT,INSERT,UPDATE,DELETE,LOCK TABLES,EXECUTE ON metastore.* TO 'hive'@'localhost';
+
+CREATE USER 'hive'@'namenode1' IDENTIFIED BY 'password';
+REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'hive'@'namenode1';
+GRANT SELECT,INSERT,UPDATE,DELETE,LOCK TABLES,EXECUTE ON metastore.* TO 'hive'@'namenode1';
+
+# 3) Create Hive metastore tables (select latest version in path)
+
+USE metastore;
+source hive-schema-1.1.0.mysql.sql
+
+# 7.3 Config Hive at /etc/hive/conf/hive-site.xml
+vi /etc/hive/conf/hive-site.xml
+
+<property>
+  <name>javax.jdo.option.ConnectionURL</name>
+  <value>jdbc:mysql://namenode1/metastore</value>
+  <description>the URL of the MySQL database</description>
+</property>
+
+<property>
+  <name>javax.jdo.option.ConnectionDriverName</name>
+  <value>com.mysql.jdbc.Driver</value>
+</property>
+
+<property>
+  <name>javax.jdo.option.ConnectionUserName</name>
+  <value>hive</value>
+</property>
+
+<property>
+  <name>javax.jdo.option.ConnectionPassword</name>
+  <value>password</value>
+</property>
+
+<property>
+  <name>datanucleus.autoCreateSchema</name>
+  <value>false</value>
+</property>
+
+<property>
+  <name>datanucleus.fixedDatastore</name>
+  <value>true</value>
+</property>
+
+<property>
+  <name>datanucleus.autoStartMechanism</name>
+  <value>SchemaTable</value>
+</property>
+
+<property>
+  <name>hive.metastore.uris</name>
+  <value>thrift://namenode1:9083</value>
+  <description>IP address (or fully-qualified domain name) and port of the metastore host</description>
+</property>
+
+# 7.4 Create Hive Directory and set permissions (Your Hive data is stored in HDFS, normally under /user/hive/warehouse)
+sudo -u hdfs hadoop fs -mkdir -p /user/hive/warehouse 
+sudo -u hdfs hadoop fs -chown -R hive /user/hive/warehouse 
+sudo -u hdfs hadoop fs -chmod -R 1777 /user/hive/warehouse 
+
+# 7.5 Link MySQL JDBC to hive
+# yum install mysql-connector-java
+ln -s /usr/share/java/mysql-connector-java.jar /usr/lib/hive/lib/
+
+# 7.6 Starting hive service 
+service hive-metastore start	
+service hive-server2 start
+
+# 7.7 Hive Log file directory
+# monitor log at /var/log/hive
+
+# 7.8 Try Hive 
+# 0) Login as user 
+su - clusterkit 
+
+# 1) Create input data 'member1.txt' contain following two lines
+1,Jonh,Smith,2006-02-15 04:34:33
+2,Sawasdee,Thailand,2006-01-01 01:01:01
+
+# 2) type "hive" in command-line 
+hive
+
+# 3) Create table 
+CREATE TABLE member (
+  mem_id SMALLINT ,
+  first_name string,
+  last_name string,
+  last_update TIMESTAMP
+) row format delimited fields terminated by ','
+LINES TERMINATED  BY '\n' 
+STORED AS  TEXTFILE location '/user/clusterkit/member' ;
+
+# 4) Show tables and Describe 
+show tables;
+desc member;
+
+# 5) Import csv to table
+load data local inpath '/home/clusterkit/member1.txt' into table member;
+
+# 6) Query
+select * from member;
+
+# 7) try this 
+select count(mem_id) from member;
+
+# 8) exit from hive
+exit;
+
+# 7.8 Try to add more input data
+# 1) put 'member2.csv' to directory /user/clusterkit/member
+hadoop fs -put member2.csv member	
+
+# 2) back to hive and query table member again!
+hive> select * from member;
+exit
+
+##### 9 Sqoop ##### 
+# 8.1) install sqoop packages
+yum install -y sqoop 
+
+# 8.2) create user on MariaDB
+mysql -u root
+
+CREATE USER 'sakila'@'localhost' IDENTIFIED BY 'password';
+GRANT ALL ON sakila.* TO 'sakila'@'localhost';
+
+CREATE USER 'sakila'@'%' IDENTIFIED BY 'password';
+GRANT ALL ON sakila.* TO 'sakila'@'%';
+
+CREATE USER 'sakila'@'namenode1' IDENTIFIED BY 'password';
+GRANT ALL ON sakila.* TO 'sakila'@'namenode1';
+
+exit;
+
+# 8.3) create soft link of mysql connector
+ln -s /usr/share/java/mysql-connector-java.jar /var/lib/sqoop/
+
+# 8.4) Import example database "sakila"
+su - clusterkit 
+# tar xvzf sakila-db.tar.gz
+cd sakila-db/
+mysql -u sakila -ppassword
+
+source sakila-schema.sql
+source sakila-data.sql
+select * from actor;
+
+# 8.5) Test sqoop
+sqoop import --connect jdbc:mysql://namenode1/sakila --username sakila -P \
+--table actor -m 1 --direct --append --target-dir /user/clusterkit/member
+
+sqoop import --connect jdbc:mysql://namenode1/sakila --username sakila -P \
+--table film_actor -m 1 --direct \
+--hive-import \
+--create-hive-table \
+--hive-table film_actor \
+--target-dir /user/clusterkit/sakila/film_actor
+
+sqoop import --connect jdbc:mysql://namenode1/sakila --username sakila -P \
+--table film -m 1 --direct \
+--hive-import \
+--create-hive-table \
+--hive-table film \
+--target-dir /user/clusterkit/sakila/film
+
+## select fa.film_id, f.title count(fa.actor_id), from film_actor fa, film f where fa.film_id=f.film_id group by film_id limit 10;
+
+
+##### 9. HUE (Webbase UI for Hadoop) #####
+# Reference http://www.cloudera.com/documentation/enterprise/latest/topics/cdh_ig_cdh_hue_configure.html#topic_15_4
+
+# 9.0 Preparing environment
+
+# 1) Add below elements in core-site.xml
+vi /etc/hadoop/conf/core-site.xml
+        <!-- Hue WebHDFS proxy user setting -->
+	<property>
+		<name>hadoop.proxyuser.hue.hosts</name>
+		<value>*</value>
+	</property>
+	<property>
+		<name>hadoop.proxyuser.hue.groups</name>
+		<value>*</value>
+	</property>
+
+#2) Create database for HUE on MariaDB, begin with:
+mysql -u root 
+create database hue;
+grant all on hue.* to 'hue'@'localhost' identified by 'password';
+grant all on hue.* to 'hue'@'namenode1' identified by 'password';
+exit;
+
+
+# 9.1 Install and configure Hue
+/root/Desktop/Hadoop/4-install_hue.sh
+
+# 9.2 Open Hue web 
+http://namenode1:8888
+
+# 9.3 Create 'admin' account
+
+# 9.4 Create user 'clusterkit' account
+# at the right top memu --> Administration --> Manage Users --> Add User
+
+# 9.5 Login with 'clusterkit' and try to use 'Hive'
+
+## Top10 of actor film
+create view v_top10actor as 
+select film_id, count(actor_id) as ActorAmount
+from film_actor
+group by film_id 
+order by ActorAmount desc
+limit 10;
+
+select film.title, v_top10actor.*
+from film, v_top10actor
+where film.film_id=v_top10actor.film_id
+order by v_top10actor.actoramount desc;
+
+# 10. Flume
+# 10.1 Install flume
+yum install -y flume-ng-agent
+
+# 10.2 Run example script huelog-flume.conf 
+su - clusterkit 
+hadoop fs -mkdir huelog-data
+flume-ng agent --conf conf --conf-file huelog-flume.conf --name agent1 -Dflume.root.logger=INFO,console
+
+# 10.3 Playing Hue for create 'access.log'
+
+# 10.4) look at result
+hadoop fs -ls huelog-data
+
+# Reference: 
+# https://sysadminci.wordpress.com/2015/07/06/97/
+# https://flume.apache.org/FlumeUserGuide.htmlsterkit
+
+
+### 11 spark ###
+
+# 11.1 at namenode (need 3GB of RAM minimum)
+yum install -y spark-master spark-history-server spark-python 
+
+### for script run /root/Desktop/Hadoop/5-install_spark.sh ###
+
+# 11.2 at datanode
+ssh data1 yum install -y spark-worker spark-python
+ssh data2 yum install -y spark-worker spark-python
+
+# 11.3 Create a directory for spark history server
+sudo -u hdfs hadoop fs -mkdir /user/spark
+sudo -u hdfs hadoop fs -chown -R spark:spark /user/spark
+sudo -u hdfs hadoop fs -mkdir /user/spark/applicationHistory 
+sudo -u hdfs hadoop fs -chmod 1777 /user/spark/applicationHistory	
+
+# 11.4 Edit the following portion of /etc/spark/conf/spark-env.sh to point to the host where the Spark Master runs:
+# export STANDALONE_SPARK_MASTER_HOST=`hostname`
+export STANDALONE_SPARK_MASTER_HOST=10.0.2.4
+
+# 11.5 Add the following to /etc/spark/conf/spark-defaults.conf on all node:
+vi /etc/spark/conf/spark-defaults.conf
+spark.master				yarn-client
+spark.eventLog.dir			hdfs://namenode1:8020/user/spark/applicationHistory
+spark.eventLog.enabled			true
+spark.executor.memory			1g
+
+# 11.6 On one node in the cluster, start the Spark Master:
+scp /etc/spark/conf/spark-* data1:/etc/spark/conf
+scp /etc/spark/conf/spark-* data2:/etc/spark/conf
+
+service spark-master start
+service spark-history-server start
+
+# 11.7 On all the other nodes, start the workers:
+ssh data1 service spark-worker start
+ssh data2 service spark-worker start
+
+# 11.8 You can use the GUI for the Spark Master at <master_host>:18080
+http://namenode1:18080/
+
+# 11.9 Test SparkPi (Run as a user)
+su - clusterkit
+spark-submit --class org.apache.spark.examples.SparkPi \
+/usr/lib/spark/lib/spark-examples.jar 10 > /tmp/output.txt
+
+cat /tmp/output.txt
+
+# 11.10 pyspark - test python spark programming
+
+1) Put salary.csv file to HDFS
+hadoop fs -put salary.csv
+
+2) run pyspark shell
+pyspark --driver-memory 1g
+
+raw_data = sc.textFile('salary.csv').cache()
+
+from pyspark.sql import SQLContext
+sqlContext = SQLContext(sc)
+
+from pyspark.sql import Row
+csv_data = raw_data.map(lambda l: l.split(","))
+row_data = csv_data.map(lambda p: Row(id=p[0],name=p[1],salary=p[2]))
+
+intdf = sqlContext.createDataFrame(row_data)
+row_data.count()
+
+intdf.registerTempTable("salary")
+salary = sqlContext.sql("select * from salary")
+salary.show()
+salary.count()
+intdf.filter(salary.salary > 25000).show()
+
+salaryAvg = sqlContext.sql("select avg(salary) from salary")
+salaryAvg.show()
+
+# 11.11 summit spark job - Kmean with iris data
+# Example from http://spark.apache.org/examples.html
+# https://github.com/apache/spark/tree/master/examples/src/main/python
+# kmeans.py from https://raw.githubusercontent.com/apache/spark/branch-1.6/examples/src/main/python/mllib/kmeans.py
+# iris data from https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data
+
+# 1) Put "iris.data" to HDFS
+cut -f 1-4 -d , iris.data > iris.csv
+hadoop fs -put iris.csv 
+
+# 2) Run kmeans with k=3
+spark-submit kmeans.py "hdfs://namenode1:8020/user/clusterkit/iris.csv" 3 
+
+
+# 11.6 Run spark on GUI with livy
+# 0) run script for install livy
+/root/Desktop/Hadoop/6-install_livy.sh 
+
+# 1) open web to 
+http://namenode1:8888/notebook/
+
+# 2) Put below code on notebook and run
+import numpy as np
+from pyspark import SparkContext
+from pyspark.mllib.clustering import KMeans
+
+def parseVector(line):
+    return np.array([float(x) for x in line.split(',')])
+
+sc = SparkContext.getOrCreate()
+lines = sc.textFile("/user/clusterkit/iris.csv")
+data = lines.map(parseVector)
+model = KMeans.train(data, 3)
+print("Final centers: " + str(model.clusterCenters))
+print("Total Cost: " + str(model.computeCost(data)))
+
+
+### 12 Zookeeper Installation ##### 
+## Zookeeper Installation
+# 12.1 install zookeeper-server at all nodes
+yum install -y zookeeper-server
+ssh data1 yum install -y zookeeper-server
+ssh data2 yum install -y zookeeper-server
+
+# 12.2 Configuration zoo.cfg and send to all nodes
+vi /etc/zookeeper/conf/zoo.cfg
+tickTime=2000
+dataDir=/var/lib/zookeeper/
+clientPort=2181
+initLimit=5
+syncLimit=2
+server.1=namenode1:2888:3888
+server.2=data1:2888:3888
+server.3=data2:2888:3888
+
+# 12.3 start zookeeper service
+scp /etc/zookeeper/conf/zoo.cfg data1:/etc/zookeeper/conf/
+scp /etc/zookeeper/conf/zoo.cfg data2:/etc/zookeeper/conf/
+
+service zookeeper-server init --myid=1
+ssh data1 service zookeeper-server init --myid=2
+ssh data2 service zookeeper-server init --myid=3
+
+service zookeeper-server start
+ssh data1 service zookeeper-server start
+ssh data2 service zookeeper-server start
+
+# 12.4 edit /etc/hue/conf/hue.ini 
+## host_ports=localhost:2181
+host_ports=namenode1:2181,data1:2181,data2:2181
+service hue restart
+
+### Table Lock Manager (Required)
+# Reference: http://www.cloudera.com/documentation/enterprise/latest/topics/cdh_ig_hiveserver2_configure.html
+
+# 12.5 edit /etc/hive/conf/hive-site.xml
+
+<property>
+  <name>hive.support.concurrency</name>
+  <description>Enable Hive's Table Lock Manager Service</description>
+  <value>true</value>
+</property>
+
+<property>
+  <name>hive.zookeeper.quorum</name>
+  <description>Zookeeper quorum used by Hive's Table Lock Manager</description>
+  <value>namenode1,data1,data2</value>
+</property>
+
+### hive tuning for prodcution
+# Configuring Heap Size and Garbage Collection for Hive Components
+# http://www.cloudera.com/documentation/enterprise/latest/topics/cdh_ig_hive_install.html
+
+
+### 13 Impala ##### 
+
+# 13.1 install on NameNode
+yum install -y impala-server impala-shell impala-catalog impala-state-store
+
+# 13.2 install on DataNode
+ssh data1 yum install -y impala-server
+ssh data2 yum install -y impala-server
+
+# 13.3 Edit file: /etc/hadoop/conf/hdfs-site.xml
+# http://www.cloudera.com/documentation/archive/impala/2-x/2-1-x/topics/impala_config_performance.html?scroll=config_performance
+vi /etc/hadoop/conf/hdfs-site.xml
+<!-- Impala configuration -->
+  <property>
+    <name>dfs.client.read.shortcircuit</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>dfs.domain.socket.path</name>
+    <value>/var/run/hadoop-hdfs/dn</value>
+  </property>
+  <property>
+    <name>dfs.client.file-block-storage-locations.timeout.millis</name>
+    <value>10000</value>
+  </property>
+  <property>
+    <name>dfs.datanode.hdfs-blocks-metadata.enabled</name>
+    <value>true</value>
+  </property>
+
+# 13.4 Distribute hdfs-site.xml to all node
+scp /etc/hadoop/conf/hdfs-site.xml data1:/etc/hadoop/conf/
+scp /etc/hadoop/conf/hdfs-site.xml data2:/etc/hadoop/conf/
+
+# 13.5 Restart HDFS service
+systemctl restart hadoop-hdfs-namenode
+ssh data1 systemctl restart hadoop-hdfs-datanode
+ssh data2 systemctl restart hadoop-hdfs-datanode
+
+# 13.6 /etc/hive/conf/hive-site.xml
+<property>
+  <name>hive.metastore.client.socket.timeout</name>
+  <value>3600</value>
+  <description>MetaStore Client socket timeout in seconds</description>
+</property>
+
+# 13.7 Restart hive metastore service
+service hive-metastore restart
+
+# 13.8 make soft link this file to /etc/impala/conf
+ln -sf /etc/hadoop/conf/core-site.xml /etc/impala/conf
+ln -sf /etc/hadoop/conf/hdfs-site.xml /etc/impala/conf
+ln -sf /etc/hive/conf/hive-site.xml /etc/impala/conf
+
+# 13.9 Edit file: /etc/default/impala
+vi /etc/default/impala
+IMPALA_CATALOG_SERVICE_HOST=namenode1 
+IMPALA_STATE_STORE_HOST=namenode1
+
+# 13.10 Distribute /etc/default/impala to all node
+scp /etc/default/impala data1:/etc/default
+scp /etc/default/impala data2:/etc/default
+
+# 13.11 Start service on NameNode
+systemctl start impala-state-store impala-catalog impala-server
+
+# 13.14 Start service on DataNode
+ssh data1 systemctl start impala-server
+ssh data2 systemctl start impala-server
+
+# 13.13 Test impala
+impala-shell -i namenode1
+select version();
+show databases;
+
+
+##### 14. oozie - workflow need for Hue (GUI) #####
+yum install -y oozie 
+
+# 14.1 Create oozie DB 
+mysql -u root
+
+create database oozie;
+grant all privileges on oozie.* to 'oozie'@'localhost' identified by 'oozie';
+grant all privileges on oozie.* to 'oozie'@'%' identified by 'oozie';
+
+exit;
+
+# 14.2 Add Config oozie at /etc/oozie/conf/oozie-site.xml
+<property>
+  <name>oozie.service.JPAService.jdbc.driver</name>
+  <value>com.mysql.jdbc.Driver</value>
+</property>
+
+<property>
+  <name>oozie.service.JPAService.jdbc.url</name>
+  <value>jdbc:mysql://127.0.0.1:3306/oozie</value>
+</property>
+
+<property>
+  <name>oozie.service.JPAService.jdbc.username</name>
+  <value>oozie</value>
+</property>
+
+<property>
+  <name>oozie.service.JPAService.jdbc.password</name>
+  <value>oozie</value>
+</property>
+
+<property>
+      <name>oozie.service.HadoopAccessorService.hadoop.configurations</name>
+      <value>*=/etc/hadoop/conf</value>
+</property>
+
+# 14.3 Add two elements in core-site.xml and restart service hadoop-hdfs-namenode on namenode.
+vi /etc/hadoop/conf/core-site.xml
+
+ <property>
+      <name>hadoop.proxyuser.oozie.hosts</name>
+      <value>*</value>
+ </property>
+
+ <property>
+      <name>hadoop.proxyuser.oozie.groups</name>
+      <value>*</value>
+ </property>
+
+service hadoop-hdfs-namenode restart
+
+# 14.4 Config oozie
+sudo -u hdfs hadoop fs -mkdir /user/oozie
+sudo -u hdfs hadoop fs -chown oozie:oozie /user/oozie
+sudo oozie-setup sharelib create -fs hdfs://namenode1:8020 -locallib /usr/lib/oozie/oozie-sharelib-yarn/
+ln -s /usr/share/java/mysql-connector-java.jar /var/lib/oozie/
+sudo -u oozie /usr/lib/oozie/bin/ooziedb.sh create -run
+
+# 14.5 start oozie
+service oozie start
+
+# 14.6 Test oozie
+oozie admin -oozie http://localhost:11000/oozie -status
+# expected output: System mode: NORMAL
+
+oozie admin -oozie http://localhost:11000/oozie -shareliblist
+# expected output: 
+# [Available ShareLib]
+# oozie
+# hive
+# distcp
+# hcatalog
+# sqoop
+# mapreduce-streaming
+# hive2
+# pig
+
+
+### Performance Tuning ###
+# edit /etc/sysctl.conf 
+vm.swappiness = 10
+echo 10 > /proc/sys/vm/swappiness 
+echo never > /sys/kernel/mm/redhat_transparent_hugepage/defrag
+
+
+# Leave Namenode safemode
+sudo hdfs hdfs dfsadmin -safemode leave
+
+
+[Appendix]
+วิธีตรวจสอบไอพีสั่ง "ip a" แล้วดูที่ interface enp0s3 ว่าได้ไอพีค่า (ค่า inet)
+ถ้าไอพีเครื่อง Namenode ไม่ใช่ 10.0.2.4 จำเป็นจะต้องทำขั้นตอนต่อไปนี้
+
+สำหรับคนที่ไอพีไม่ตรงกับไฟล์ /etc/hosts ที่เตรียมไว้ให้
+1. ให้แก้ไขไฟล์ /etc/hosts ให้ตรงกับความเป็นจริง
+2. ส่งไฟล์คอนฟิกที่แก้ไขแล้วไปยังเครื่อง datanode
+scp /etc/hosts data1:/etc/
+scp /etc/hosts data2:/etc/
+3. ตั้งชื่อเครื่องใน session ปัจจุบันให้ถูกต้อง สังเกตุจาก shell ว่าเป็นชื่อเครื่องหรือไม่ ถ้าเป็น localhost เช่น [root@localhost ]ให้ตั้งตามคำสั่งนี้
+hostname namenode1
+ssh data1 hostname data1
+ssh data2 hostname data2
+
+จากนั้นค่อยติดตั้งซอฟต์แวร์ต่อตามขั้นตอนปรกติ
