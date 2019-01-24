@@ -211,3 +211,62 @@ lrwxrwxrwx  1 root root   40 ธ.ค.  27 02:35 mysql-connector-java.jar -> /usr
 
 
 
+
+
+## 10. Install HttpFS
+
+refer link : *https://www.cloudera.com/documentation/enterprise/5-12-x/topics/cdh_ig_httpfs_about.html*
+
+- To install the HttpFS package on a RHEL-compatible system:
+
+`sudo yum install hadoop-httpfs`
+
+- Configuring the HttpFS Proxy User
+
+At core-site.xml add property for proxyuser.
+
+*core-site.xml path /etc/hadoop/conf*
+
+```
+<property>  
+<name>hadoop.proxyuser.httpfs.hosts</name>  
+<value>*</value>  
+</property>  
+<property>  
+<name>hadoop.proxyuser.httpfs.groups</name>  
+<value>*</value>  
+</property>
+```
+
+- Starting the HttpFS Server.
+
+`sudo service hadoop-httpfs start`
+
+
+```
+By default, HttpFS server runs on port 14000 and its URL is http://<HTTPFS_HOSTNAME>:14000/webhdfs/v1.
+
+```
+
+- Stopping the HttpFS Server
+
+`sudo service hadoop-httpfs stop`
+
+
+- Using the HttpFS Server with curl
+
+At terminal console.
+```
+root@piboonsak-probook:~# curl "http://203.154.58.100:14000/webhdfs/v1?op=gethomedirectory&user.name=admin"
+
+```
+
+You should see output such as this.
+```
+root@piboonsak-probook:~# curl "http://203.154.58.100:14000/webhdfs/v1?op=gethomedirectory&user.name=admin"
+{"Path":"\/user\/admin"}
+
+```
+
+ref link: *https://hadoop.apache.org/docs/r1.0.4/webhdfs.html#GETFILESTATUS*
+
