@@ -51,6 +51,22 @@ passwd: all authentication tokens updated successfully.
 [root@hadoop-namenodecdh ~]# sudo yum install wget
 
 ```
+- Install epel-release
+
+`yum install epel-release`
+
+```
+[root@hadoop-namenodecdh ~]# sudo yum install epel-release -y
+
+```
+- Install htop
+
+`yum install htop`
+
+```
+[root@hadoop-namenodecdh ~]# sudo yum install htop -y
+
+```
 
 
 ---
@@ -517,4 +533,3 @@ Created symlink from /etc/systemd/system/default.target to /usr/lib/systemd/syst
 
 
 ---
-
